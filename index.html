@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Savings Tracker</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        display: ['DM Sans', 'sans-serif'],
+                    },
+                    colors: {
+                        canvas: 'var(--color-canvas)',
+                        surface: 'var(--color-surface)',
+                        primary: 'var(--color-primary)',
+                        taupe: 'var(--color-taupe)',
+                        sage: 'var(--color-sage)',
+                        terracotta: 'var(--color-terracotta)',
+                        line: 'var(--color-line)',
+                        navy: '#1A2B4C',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        :root {
+            --color-canvas: #F7F3EE;
+            --color-surface: #FBFAF7;
+            --color-primary: #1F1D1B;
+            --color-taupe: #B8A99A;
+            --color-sage: #9DA89D;
+            --color-terracotta: #C68A6E;
+            --color-line: #E8E2D9;
+        }
+
+        .dark {
+            --color-canvas: #121212;
+            --color-surface: #1E1E1E;
+            --color-primary: #E0E0E0;
+            --color-taupe: #888888;
+            --color-sage: #6D8C6D;
+            --color-terracotta: #A66A53;
+            --color-line: #333333;
+        }
+
+        body {
+            background-color: var(--color-canvas);
+            color: var(--color-primary);
+            font-family: 'Inter', sans-serif;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        h1, h2, h3, h4, h5, h6 {
+            font-family: 'DM Sans', sans-serif;
+        }
+
+        ::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--color-line);
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--color-taupe);
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 2px;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        const parseDateDDMMYYYY = (dateStr) => {
+            if (!dateStr) return new Date();
+            const parts = String(dateStr).split('/');
+            if (parts.length === 3) {
+                const day = parseInt(parts[0], 10);
+                const month = parseInt(parts[1], 10) - 1;
+                const year = parseInt(parts[2], 10);
+                const d = new Date(year, month, day);
+                if (!isNaN(d.getTime())) return d;
+            }
+            const fallback = new Date(dateStr); 
+            return isNaN(fallback.getTime()) ? new Date() : fallback;
+        };
+
+        const INITIAL_FUNDS = [
+            { emoji: '✈️', name: 'Tokyo 2026', goal: 400000, balance: 172000, target: '01/10/2026', monthly: 16000, planned: 20000, status: '🟢 On track', progress: 43 },
+            { emoji: '🎄', name: 'Christmas', goal: 65000, balance: 32500, target: '01/12/2026', monthly: 4800, planned: 4800, status: '🟢 On track', progress: 50 },
+            { emoji: '💍', name: 'Wedding', goal: 1200000, balance: 680000, target: '15/06/2027', monthly: 40000, planned: 30000, status: '🔴 Behind', progress: 56 },
+            { emoji: '🚗', name: 'Car Maintenance', goal: 95000, balance: 20000, target: '15/08/2026', monthly: 25000, planned: 26000, status: '🟢 On track', progress: 21 },
+            { emoji: '🏡', name: 'Home Repairs', goal: 200000, balance: 45000, target: '01/01/2027', monthly: 20000, planned: 8000, status: '🔴 Behind', progress: 22 },
+            { emoji: '🐾', name: 'Pet Care', goal: 80000, balance: 80000, target: '31/12/2026', monthly: 0, planned: 0, status: '🟢 Complete', progress: 100 },
+        ];
+
+        const getEmojiForFund = (name) => {
+            if (!name) return '🎯';
+            const lowerName = name.toLowerCase();
+            
+            if (/\b(date|dates|wife|husband|couple|couples|partner|marriage|anniversary|love|romance|vows|honeymoon|proposal|engagement|bridal|shower|valentine|valentines)\b/.test(lowerName)) return '💖';
+            if (/\b(cruise|ship|boat|sailing)\b/.test(lowerName)) return '🚢';
+            if (/\b(disney|disneyland|disneyworld|theme park|amusement)\b/.test(lowerName)) return '🏰';
+            if (/\b(camp|camping|tent|rv|outdoors|hiking|backpacking|nature)\b/.test(lowerName)) return '🏕️';
+            if (/\b(beach|ocean|resort|island|tropical|bahamas|cancun)\b/.test(lowerName)) return '🏖️';
+            if (/\b(trip|vacation|tokyo|paris|london|travel|flight|hotel|airbnb|holiday|getaway|passport|tour|flights|luggage|europe|asia|bali|hawaii)\b/.test(lowerName)) return '✈️';
+            if (/\b(motorcycle|bike|bicycle|cycling)\b/.test(lowerName)) return '🚲';
+            if (/\b(car|auto|vehicle|tires|insurance|honda|toyota|ford|tesla|truck|gas|mechanic|repairs|registration|dmv|oil change|maintenance|parking|tolls)\b/.test(lowerName)) return '🚗';
+            if (/\b(furniture|sofa|couch|bed|mattress|table|chair|decor|rug)\b/.test(lowerName)) return '🛋️';
+            if (/\b(home|house|mortgage|rent|kitchen|remodel|roof|yard|garden|utilities|internet|electricity|down payment|hoa|lawn|pool|renovation|appliances|plumbing|hvac|water|property tax)\b/.test(lowerName)) return '🏡';
+            if (/\b(college|university|tuition|school|classes|courses|student loan|books|textbooks|semester|degree|phd|masters|education|learning)\b/.test(lowerName)) return '🎓';
+            if (/\b(credit card|debt|loan|payoff|klarna|affirm|afterpay|visa|mastercard|amex|discover)\b/.test(lowerName)) return '💳';
+            if (/\b(tax|taxes|irs|cpa|accounting)\b/.test(lowerName)) return '🧾';
+            if (/\b(investing|crypto|stocks|roth|ira|401k|bitcoin|ethereum|brokerage|wealth|dividends)\b/.test(lowerName)) return '📈';
+            if (/\b(business|startup|llc|freelance|marketing|career|work)\b/.test(lowerName)) return '💼';
+            if (/\b(christmas|xmas|santa|holiday)\b/.test(lowerName)) return '🎄';
+            if (/\b(birthday|birthdays|gift|gifts|present)\b/.test(lowerName)) return '🎁';
+            if (/\b(wedding|bride|groom|matrimony)\b/.test(lowerName)) return '💍';
+            if (/\b(baby|daycare|kids|child|children|nursery|diapers|formula)\b/.test(lowerName)) return '👶';
+            if (/\b(halloween|spooky|costume)\b/.test(lowerName)) return '🎃';
+            if (/\b(thanksgiving|turkey)\b/.test(lowerName)) return '🦃';
+            if (/\b(easter|bunny)\b/.test(lowerName)) return '🐰';
+            if (/\b(diwali|hanukkah|ramadan|hajj|eid)\b/.test(lowerName)) return '✨';
+            if (/\b(emergency|safety|backup|cushion|hospital|surgery|urgent|buffer)\b/.test(lowerName)) return '🆘';
+            if (/\b(pet|dog|cat|vet|puppy|kitten|food|grooming|animals|fish|bird)\b/.test(lowerName)) return '🐾';
+            if (/\b(medical|dental|teeth|doctor|health|vision|glasses|contacts|braces|invisalign|orthodontist)\b/.test(lowerName)) return '🦷';
+            if (/\b(self|care|spa|massage|wellness|therapy|mental|facial)\b/.test(lowerName)) return '💆';
+            if (/\b(beauty|makeup|hair|nails|skincare|cosmetics|salon|sephora|ulta|barber|haircut)\b/.test(lowerName)) return '💅';
+            if (/\b(clothes|clothing|shopping|wardrobe|shoes|sneakers|apparel|mall|dresses|suit|winter gear|coat)\b/.test(lowerName)) return '🛍️';
+            if (/\b(jewelry|ring|necklace|bracelet|earrings|watches)\b/.test(lowerName)) return '💎';
+            if (/\b(tattoo|tattoos|ink|piercing)\b/.test(lowerName)) return '🖋️';
+            if (/\b(gym|fitness|workout|trainer|marathon|running|yoga|pilates|crossfit|sports|athletics)\b/.test(lowerName)) return '🏋️';
+            if (/\b(movies|movie|cinema|theater|film|popcorn)\b/.test(lowerName)) return '🍿';
+            if (/\b(concert|concerts|music|festival|tickets|show|band|gig|live|symphony)\b/.test(lowerName)) return '🎟️';
+            if (/\b(game|games|gaming|ps5|xbox|nintendo|steam|pc|board games|tabletop)\b/.test(lowerName)) return '🎮';
+            if (/\b(eat|eating|out|dining|restaurant|food|burger|sushi|pizza|doordash|uber eats|takeout|dinner)\b/.test(lowerName)) return '🍔';
+            if (/\b(coffee|starbucks|cafe|latte|boba|tea)\b/.test(lowerName)) return '☕';
+            if (/\b(groceries|grocery|supermarket|market|produce|costco|sams|walmart)\b/.test(lowerName)) return '🛒';
+            if (/\b(party|club|drinks|bar|alcohol|wine|beer|night out|liquor|cocktails)\b/.test(lowerName)) return '🥂';
+            if (/\b(art|painting|crafts|knitting|sewing|crochet|pottery|supplies|diy)\b/.test(lowerName)) return '🎨';
+            if (/\b(guitar|piano|drums|instrument|bass|keyboard)\b/.test(lowerName)) return '🎸';
+            if (/\b(camera|lens|photography|drone|gopro|photo)\b/.test(lowerName)) return '📷';
+            if (/\b(subscription|subscriptions|netflix|spotify|gym|prime|hulu|disney\+|apple music|patreon)\b/.test(lowerName)) return '📱';
+            if (/\b(phone|iphone|macbook|laptop|computer|ipad|tech|apple|tablet|pc|electronics)\b/.test(lowerName)) return '💻';
+            if (/\b(tv|television|projector|home theater|monitor)\b/.test(lowerName)) return '📺';
+            if (/\b(headphones|audio|speakers|airpods)\b/.test(lowerName)) return '🎧';
+            if (/\b(charity|donation|giving|tithe|church|mosque|temple|fundraiser|zakat)\b/.test(lowerName)) return '🤝';
+            if (/\b(insurance|premium|policy|protection)\b/.test(lowerName)) return '🛡️';
+            
+            return null; 
+        };
+
+        const CURRENCIES = [
+            { code: 'USD', symbol: '$', flag: '🇺🇸', label: 'US Dollar', rate_to_usd: 1.00 },
+            { code: 'EUR', symbol: '€', flag: '🇪🇺', label: 'Euro', rate_to_usd: 0.92 },
+            { code: 'GBP', symbol: '£', flag: '🇬🇧', label: 'British Pound', rate_to_usd: 0.79 },
+            { code: 'INR', symbol: '₹', flag: '🇮🇳', label: 'Indian Rupee', rate_to_usd: 95.60 }, 
+            { code: 'AUD', symbol: 'A$', flag: '🇦🇺', label: 'Australian Dollar', rate_to_usd: 1.51 },
+            { code: 'CAD', symbol: 'C$', flag: '🇨🇦', label: 'Canadian Dollar', rate_to_usd: 1.36 },
+            { code: 'JPY', symbol: '¥', flag: '🇯🇵', label: 'Japanese Yen', rate_to_usd: 155.40 },
+            { code: 'CNY', symbol: '¥', flag: '🇨🇳', label: 'Chinese Yuan', rate_to_usd: 7.22 },
+            { code: 'CHF', symbol: 'Fr.', flag: '🇨🇭', label: 'Swiss Franc', rate_to_usd: 0.91 },
+            { code: 'SGD', symbol: 'S$', flag: '🇸🇬', label: 'Singapore Dollar', rate_to_usd: 1.35 },
+            { code: 'NZD', symbol: 'NZ$', flag: '🇳🇿', label: 'New Zealand Dollar', rate_to_usd: 1.66 },
+            { code: 'HKD', symbol: 'HK$', flag: '🇭🇰', label: 'Hong Kong Dollar', rate_to_usd: 7.83 }, 
+            { code: 'ZAR', symbol: 'R', flag: '🇿🇦', label: 'South African Rand', rate_to_usd: 18.45 },
+            { code: 'BRL', symbol: 'R$', flag: '🇧🇷', label: 'Brazilian Real', rate_to_usd: 5.14 },
+            { code: 'MXN', symbol: 'Mex$', flag: '🇲🇽', label: 'Mexican Peso', rate_to_usd: 16.65 },
+            { code: 'AED', symbol: 'د.إ', flag: '🇦🇪', label: 'UAE Dirham', rate_to_usd: 3.67 },
+            { code: 'SAR', symbol: '﷼', flag: '🇸🇦', label: 'Saudi Riyal', rate_to_usd: 3.75 },
+            { code: 'SEK', symbol: 'kr', flag: '🇸🇪', label: 'Swedish Krona', rate_to_usd: 10.82 },
+            { code: 'NOK', symbol: 'kr', flag: '🇳🇴', label: 'Norwegian Krone', rate_to_usd: 10.68 },
+            { code: 'KRW', symbol: '₩', flag: '🇰🇷', label: 'South Korean Won', rate_to_usd: 1365.00 },
+            { code: 'TRY', symbol: '₺', flag: '🇹🇷', label: 'Turkish Lira', rate_to_usd: 32.25 },
+            { code: 'RUB', symbol: '₽', flag: '🇷🇺', label: 'Russian Ruble', rate_to_usd: 91.50 },
+            { code: 'THB', symbol: '฿', flag: '🇹🇭', label: 'Thai Baht', rate_to_usd: 36.65 },
+            { code: 'IDR', symbol: 'Rp', flag: '🇮🇩', label: 'Indonesian Rupiah', rate_to_usd: 16050.00 },
+            { code: 'MYR', symbol: 'RM', flag: '🇲🇾', label: 'Malaysian Ringgit', rate_to_usd: 4.71 },
+            { code: 'PHP', symbol: '₱', flag: '🇵🇭', label: 'Philippine Peso', rate_to_usd: 57.60 },
+            { code: 'VND', symbol: '₫', flag: '🇻🇳', label: 'Vietnamese Dong', rate_to_usd: 25425.00 },
+            { code: 'PLN', symbol: 'zł', flag: '🇵🇱', label: 'Polish Zloty', rate_to_usd: 3.96 },
+            { code: 'ARS', symbol: 'AR$', flag: '🇦🇷', label: 'Argentine Peso', rate_to_usd: 888.00 },
+            { code: 'ILS', symbol: '₪', flag: '🇮🇱', label: 'Israeli New Shekel', rate_to_usd: 3.72 }
+        ];
+
+        const EditableCell = ({ value, isCurrency, currencyConfig, onChange, type = "text", className = "" }) => {
+            const [isEditing, setIsEditing] = useState(false);
+            const [tempVal, setTempVal] = useState(value);
+
+            useEffect(() => setTempVal(value), [value]);
+
+            const handleBlur = () => {
+                setIsEditing(false);
+                if (tempVal !== value) {
+                    onChange(type === 'number' ? Number(tempVal) || 0 : tempVal);
+                }
+            };
+
+            if (isEditing) {
+                return (
+                    <input
+                        type={type}
+                        value={tempVal}
+                        onChange={(e) => setTempVal(e.target.value)}
+                        onBlur={handleBlur}
+                        onKeyDown={(e) => e.key === 'Enter' && handleBlur()}
+                        className={`bg-surface border border-primary px-2 py-1 rounded w-full outline-none text-primary ${className}`}
+                        autoFocus
+                    />
+                );
+            }
+
+            const displayValue = isCurrency 
+                ? `${currencyConfig.symbol}${Number(value).toLocaleString(currencyConfig.code === 'INR' ? 'en-IN' : 'en-US', { maximumFractionDigits: 0 })}` 
+                : value;
+
+            return (
+                <div 
+                    onClick={() => setIsEditing(true)}
+                    className={`cursor-pointer hover:bg-line/30 px-2 py-1 rounded border border-transparent hover:border-line/50 transition-colors flex items-center min-h-[28px] ${className}`}
+                >
+                    {displayValue}
+                </div>
+            );
+        };
+
+        const DashboardPreview = ({ funds, setFunds, currencyConfig, syncState }) => {
+            const formatCurrency = (val) => `${currencyConfig.symbol}${Number(val).toLocaleString(currencyConfig.code === 'INR' ? 'en-IN' : 'en-US', { maximumFractionDigits: 0 })}`;
+
+            const recalculateFunds = (currentFunds, indexToUpdate, field, newValue) => {
+                const newFunds = [...currentFunds];
+                const fund = { ...newFunds[indexToUpdate] };
+                
+                fund[field] = newValue;
+
+                if (field === 'name') {
+                    const suggestedEmoji = getEmojiForFund(newValue);
+                    if (suggestedEmoji && fund.emoji === '🎯') {
+                        fund.emoji = suggestedEmoji;
+                    }
+                }
+
+                const targetDate = parseDateDDMMYYYY(fund.target);
+                const today = new Date();
+                let monthsRemaining = 1;
+                
+                if (!isNaN(targetDate.getTime())) {
+                    monthsRemaining = (targetDate.getFullYear() - today.getFullYear()) * 12 + (targetDate.getMonth() - today.getMonth());
+                }
+                monthsRemaining = Math.max(1, monthsRemaining || 1);
+
+                const safeGoal = Number(fund.goal) || 0;
+                const safeBalance = Number(fund.balance) || 0;
+                const safePlanned = Number(fund.planned) || 0;
+
+                const amountNeeded = Math.max(0, safeGoal - safeBalance);
+                fund.monthly = amountNeeded > 0 ? Math.ceil(amountNeeded / monthsRemaining) : 0;
+                
+                fund.progress = safeGoal > 0 ? Math.min(100, Math.round((safeBalance / safeGoal) * 100)) : 0;
+                
+                fund.monthly = fund.monthly || 0;
+                fund.progress = fund.progress || 0;
+
+                if (fund.progress >= 100) {
+                    fund.status = '🟢 Complete';
+                } else if (fund.monthly <= safePlanned) {
+                    fund.status = '🟢 On track';
+                } else if (fund.monthly <= safePlanned * 1.1) {
+                    fund.status = '🟡 Close';
+                } else {
+                    fund.status = '🔴 Behind';
+                }
+
+                newFunds[indexToUpdate] = fund;
+                return newFunds;
+            };
+
+            const addNewFund = () => {
+                const newFund = {
+                    emoji: '🎯', name: 'New Goal', goal: 10000, balance: 0, 
+                    target: '01/12/2026', monthly: 1000, planned: 0, status: '🔴 Behind', progress: 0
+                };
+                setFunds([...funds, newFund]);
+            };
+
+            const deleteFund = (index) => {
+                const newFunds = [...funds];
+                newFunds.splice(index, 1);
+                setFunds(newFunds);
+            };
+
+            const totalSaved = funds.reduce((acc, fund) => acc + (Number(fund.balance) || 0), 0);
+            const totalGoal = funds.reduce((acc, fund) => acc + (Number(fund.goal) || 0), 0);
+            const overallProgress = totalGoal > 0 ? Math.round((totalSaved / totalGoal) * 100) : 0;
+            const fundsOnTrack = funds.filter(f => f.status.includes('track') || f.status.includes('Complete')).length;
+
+            return (
+                <div className="max-w-6xl mx-auto p-4 sm:p-6 md:p-8 animate-fade-in relative">
+                    <header className="mb-6 sm:mb-10 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
+                        <div>
+                            <h1 className="text-2xl sm:text-3xl font-light tracking-wide mb-1 sm:mb-2 flex items-center gap-3">
+                                Savings Tracker Overview
+                                {syncState && <span className="text-[10px] bg-canvas/80 px-2 py-0.5 rounded text-sage border border-line/50 transition-all font-sans font-medium">{syncState}</span>}
+                            </h1>
+                            <p className="text-taupe font-medium tracking-wide text-xs sm:text-sm mb-1">
+                                Hello Friend! 👋
+                            </p>
+                            <p className="text-taupe text-xs sm:text-sm">Your progress, visualized.</p>
+                        </div>
+                    </header>
+
+                    {}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8 sm:mb-10">
+                        {[
+                            { label: 'TOTAL SAVED', value: formatCurrency(totalSaved) },
+                            { label: 'TOTAL GOAL', value: formatCurrency(totalGoal) },
+                            { label: 'OVERALL PROGRESS', value: `${overallProgress || 0}%`, bar: overallProgress || 0 },
+                            { label: 'FUNDS ON TRACK', value: `${fundsOnTrack} of ${funds.length}` }
+                        ].map((stat, i) => (
+                            <div key={i} className="bg-surface rounded-2xl p-5 sm:p-6 border border-line flex flex-col justify-between shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)]">
+                                <span className="text-[10px] font-bold tracking-widest text-taupe mb-2">{stat.label}</span>
+                                <span className="text-2xl sm:text-3xl font-light text-primary tabular-nums">{stat.value}</span>
+                                {stat.bar !== undefined && (
+                                    <div className="w-full bg-line rounded-full h-1 mt-4 overflow-hidden flex-shrink-0">
+                                        <div className="bg-primary h-full rounded-full transition-all duration-1000" style={{ width: `${stat.bar}%` }}></div>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+
+                    {}
+                    <div className="bg-surface rounded-2xl border border-line mb-8 sm:mb-10 shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)] overflow-hidden">
+                        <div className="px-4 sm:px-6 py-4 border-b border-line flex justify-between items-center bg-canvas/30">
+                            <span className="text-xs font-bold tracking-widest text-taupe">ACTIVE FUNDS</span>
+                            <button onClick={addNewFund} className="text-sm text-primary hover:text-taupe font-medium flex items-center gap-1 transition-colors">
+                                <span>+</span> Add Fund
+                            </button>
+                        </div>
+                        <div className="overflow-x-auto custom-scrollbar">
+                            <table className="w-full text-left text-xs sm:text-sm whitespace-nowrap min-w-[800px]">
+                                <thead>
+                                    <tr className="text-taupe border-b border-line bg-canvas/10">
+                                        <th className="py-3 px-4 sm:px-6 font-medium">Fund Name</th>
+                                        <th className="py-3 px-4 sm:px-6 font-medium text-right">Goal Amount</th>
+                                        <th className="py-3 px-4 sm:px-6 font-medium text-right">Current Balance</th>
+                                        <th className="py-3 px-4 sm:px-6 font-medium text-center w-32 sm:w-48">Progress</th>
+                                        <th className="py-3 px-4 sm:px-6 font-medium text-right" title="Format: DD/MM/YYYY">Target Date ⓘ</th>
+                                        <th className="py-3 px-4 sm:px-6 font-medium text-right">Needed / Mo</th>
+                                        <th className="py-3 px-4 sm:px-6 font-medium text-right">Planned / Mo</th>
+                                        <th className="py-3 px-4 sm:px-6 font-medium">Status</th>
+                                        <th className="py-3 px-2 sm:px-4"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {funds.map((fund, i) => (
+                                        <tr key={i} className="border-b border-line/50 hover:bg-canvas/40 transition-colors group">
+                                            <td className="py-2 sm:py-3 px-4 sm:px-6">
+                                                <div className="flex items-center gap-2">
+                                                    <EditableCell value={fund.emoji} onChange={(v) => setFunds(recalculateFunds(funds, i, 'emoji', v))} className="text-lg sm:text-xl w-6 sm:w-8 text-center" />
+                                                    <EditableCell value={fund.name} onChange={(v) => setFunds(recalculateFunds(funds, i, 'name', v))} className="font-medium min-w-[120px]" />
+                                                </div>
+                                            </td>
+                                            <td className="py-2 sm:py-3 px-4 sm:px-6 text-right tabular-nums text-taupe">
+                                                <EditableCell value={fund.goal} isCurrency currencyConfig={currencyConfig} type="number" onChange={(v) => setFunds(recalculateFunds(funds, i, 'goal', v))} className="justify-end min-w-[80px]" />
+                                            </td>
+                                            <td className="py-2 sm:py-3 px-4 sm:px-6 text-right tabular-nums font-medium">
+                                                <EditableCell value={fund.balance} isCurrency currencyConfig={currencyConfig} type="number" onChange={(v) => setFunds(recalculateFunds(funds, i, 'balance', v))} className="justify-end min-w-[80px]" />
+                                            </td>
+                                            <td className="py-2 sm:py-3 px-4 sm:px-6">
+                                                <div className="flex items-center gap-2 sm:gap-3">
+                                                    <div className="flex-1 bg-line rounded-full h-1.5 overflow-hidden">
+                                                        <div 
+                                                            className={`h-full rounded-full transition-all duration-500 ${fund.progress >= 100 ? 'bg-sage' : 'bg-taupe'}`} 
+                                                            style={{ width: `${fund.progress || 0}%` }}
+                                                        ></div>
+                                                    </div>
+                                                    <span className="text-[10px] sm:text-xs text-taupe w-6 sm:w-8 text-right">{fund.progress || 0}%</span>
+                                                </div>
+                                            </td>
+                                            <td className="py-2 sm:py-3 px-4 sm:px-6 text-right tabular-nums text-taupe">
+                                                <EditableCell value={fund.target} onChange={(v) => setFunds(recalculateFunds(funds, i, 'target', v))} className="justify-end min-w-[90px]" />
+                                            </td>
+                                            <td className="py-2 sm:py-3 px-4 sm:px-6 text-right tabular-nums text-taupe/60 cursor-not-allowed">
+                                                {formatCurrency(fund.monthly || 0)}
+                                            </td>
+                                            <td className="py-2 sm:py-3 px-4 sm:px-6 text-right tabular-nums">
+                                                <EditableCell value={fund.planned} isCurrency currencyConfig={currencyConfig} type="number" onChange={(v) => setFunds(recalculateFunds(funds, i, 'planned', v))} className="justify-end font-medium min-w-[80px]" />
+                                            </td>
+                                            <td className="py-2 sm:py-3 px-4 sm:px-6">
+                                                <span className={`inline-flex items-center px-2 py-1 rounded-md text-[10px] sm:text-xs font-medium ${
+                                                    fund.status.includes('track') || fund.status.includes('Complete') ? 'bg-sage/10 text-sage border border-sage/20' : 
+                                                    fund.status.includes('Close') ? 'bg-yellow-500/10 text-yellow-600 border border-yellow-500/20' : 
+                                                    'bg-terracotta/10 text-terracotta border border-terracotta/20'
+                                                }`}>
+                                                    {fund.status}
+                                                </span>
+                                            </td>
+                                            <td className="py-2 sm:py-3 px-2 sm:px-4 text-right">
+                                                <button onClick={() => deleteFund(i)} className="opacity-0 group-hover:opacity-100 text-taupe hover:text-terracotta p-1 transition-all">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    {}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+                        
+                        <div className="bg-surface rounded-2xl p-5 sm:p-6 border border-line shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)]">
+                            <span className="text-[10px] font-bold tracking-widest text-taupe block mb-4 sm:mb-6">WHERE SAVINGS LIVE</span>
+                            <div className="flex flex-col sm:flex-row items-center gap-6 sm:gap-8">
+                                <div className="relative w-40 sm:w-48 h-40 sm:h-48 flex-shrink-0">
+                                    <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
+                                        <circle cx="50" cy="50" r="46" fill="transparent" stroke="var(--color-line)" strokeWidth="6" opacity="0.3" />
+                                        {(() => {
+                                            let currentOffset = 0;
+                                            const sortedFunds = [...funds].filter(f => f.balance > 0).sort((a, b) => b.balance - a.balance);
+                                            const colors = ['var(--color-primary)', 'var(--color-taupe)', 'var(--color-sage)', 'var(--color-terracotta)', '#A3B1C6', '#D4C5B9'];
+                                            
+                                            return sortedFunds.map((fund, i) => {
+                                                const percentage = fund.balance / totalSaved;
+                                                const circumference = 2 * Math.PI * 46;
+                                                const strokeDasharray = `${percentage * circumference} ${circumference}`;
+                                                const strokeDashoffset = -currentOffset * circumference;
+                                                currentOffset += percentage;
+                                                
+                                                return (
+                                                    <circle 
+                                                        key={i} cx="50" cy="50" r="46" fill="transparent" 
+                                                        stroke={colors[i % colors.length]} strokeWidth="6" 
+                                                        strokeDasharray={strokeDasharray} strokeDashoffset={strokeDashoffset}
+                                                        className="transition-all duration-1000"
+                                                    />
+                                                );
+                                            });
+                                        })()}
+                                    </svg>
+                                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                                        <span className="text-[10px] uppercase tracking-wider text-taupe mb-0.5">Total</span>
+                                        <span className="text-sm font-medium">{formatCurrency(totalSaved)}</span>
+                                    </div>
+                                </div>
+                                <div className="flex-1 w-full space-y-3">
+                                    {[...funds].filter(f => f.balance > 0).sort((a, b) => b.balance - a.balance).slice(0, 5).map((f, i) => (
+                                        <div key={i} className="flex justify-between items-center text-xs sm:text-sm">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: ['var(--color-primary)', 'var(--color-taupe)', 'var(--color-sage)', 'var(--color-terracotta)', '#A3B1C6', '#D4C5B9'][i % 6] }}></div>
+                                                <span className="truncate max-w-[120px] sm:max-w-[160px]">{f.name}</span>
+                                            </div>
+                                            <span className="font-medium tabular-nums">{formatCurrency(f.balance)}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-surface rounded-2xl p-5 sm:p-6 border border-line shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)] flex flex-col h-[300px]">
+                            <span className="text-[10px] font-bold tracking-widest text-taupe block mb-4 sm:mb-6">URGENCY MAP</span>
+                            <div className="flex-1 overflow-y-auto pr-2 space-y-3 custom-scrollbar">
+                                {[...funds]
+                                    .filter(f => !f.status.includes('Complete'))
+                                    .sort((a, b) => parseDateDDMMYYYY(a.target) - parseDateDDMMYYYY(b.target))
+                                    .map((f, i) => {
+                                        const dateObj = parseDateDDMMYYYY(f.target);
+                                        const today = new Date();
+                                        const monthsLeft = (dateObj.getFullYear() - today.getFullYear()) * 12 + (dateObj.getMonth() - today.getMonth());
+                                        const formattedDate = !isNaN(dateObj.getTime()) ? dateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'No Date';
+
+                                        return (
+                                            <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-canvas border transition-colors border-navy border-l-4">
+                                                <div className="flex items-center gap-2 sm:gap-3">
+                                                    <span className="text-lg sm:text-xl">{f.emoji}</span>
+                                                    <div>
+                                                        <div className="text-xs sm:text-sm font-medium">{f.name}</div>
+                                                        <div className="text-[10px] sm:text-xs text-taupe">{formattedDate}</div>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <div className="text-xs sm:text-sm font-medium">{monthsLeft <= 0 ? 'Due Now' : `${monthsLeft} mo left`}</div>
+                                                    <div className="text-[10px] sm:text-xs text-taupe tabular-nums">Need {formatCurrency(f.monthly || 0)}/mo</div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                {[...funds].filter(f => !f.status.includes('Complete')).length === 0 && (
+                                    <div className="text-center text-taupe text-sm py-8">All active goals are complete! 🎉</div>
+                                )}
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            );
+        };
+
+        const CurrenciesView = ({ currencyConfig, onCurrencySelect }) => {
+            const [searchQuery, setSearchQuery] = useState('');
+
+            const filteredCurrencies = CURRENCIES.filter(curr => 
+                curr.code.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                curr.label.toLowerCase().includes(searchQuery.toLowerCase())
+            );
+
+            return (
+                <div className="max-w-4xl mx-auto p-4 sm:p-6 md:p-8 animate-fade-in">
+                    <header className="mb-6 sm:mb-10">
+                        <h1 className="text-2xl sm:text-3xl font-light tracking-wide mb-1 sm:mb-2">Currencies</h1>
+                        <p className="text-taupe text-xs sm:text-sm">Choose your currency. All your balances and goals will automatically convert using highly precise, live market exchange rates.</p>
+                    </header>
+                    
+                    <div className="bg-surface rounded-2xl p-4 sm:p-6 md:p-8 border border-line shadow-sm">
+                        
+                        <div className="mb-6 relative">
+                            <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 text-taupe w-4 sm:w-5 h-4 sm:h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                            <input 
+                                type="text" 
+                                placeholder="Search currencies (e.g. Euro, USD, JPY)..." 
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full bg-canvas border border-line focus:border-taupe rounded-xl py-2 sm:py-3 pl-9 sm:pl-10 pr-4 outline-none transition-colors text-xs sm:text-sm text-primary"
+                            />
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 max-h-[400px] sm:max-h-[500px] overflow-y-auto custom-scrollbar pr-2">
+                            {filteredCurrencies.length > 0 ? filteredCurrencies.map(curr => (
+                                <button
+                                    key={curr.code}
+                                    onClick={() => onCurrencySelect(curr)}
+                                    className={`flex items-center p-3 sm:p-4 rounded-xl border transition-all text-left ${
+                                        currencyConfig.code === curr.code 
+                                            ? 'border-primary bg-line/20 shadow-sm' 
+                                            : 'border-line hover:border-taupe bg-canvas/30'
+                                    }`}
+                                >
+                                    <span className="text-2xl sm:text-3xl w-8 sm:w-12 text-center">{curr.flag}</span>
+                                    <div className="ml-2 sm:ml-3">
+                                        <div className="text-xs sm:text-sm font-medium text-primary flex items-center gap-1.5 sm:gap-2">
+                                            {curr.code} 
+                                            <span className="text-taupe text-[9px] sm:text-[10px] px-1.5 py-0.5 bg-line/50 rounded-md font-bold tracking-widest">{curr.symbol.trim()}</span>
+                                        </div>
+                                        <div className="text-[10px] sm:text-xs text-taupe">{curr.label}</div>
+                                    </div>
+                                </button>
+                            )) : (
+                                <div className="col-span-full text-center py-6 sm:py-8 text-taupe text-sm">
+                                    No currencies found matching "{searchQuery}"
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [isDarkMode, setIsDarkMode] = useState(false);
+            const [currencyConfig, setCurrencyConfig] = useState(CURRENCIES.find(c => c.code === 'INR'));
+            const [funds, setFunds] = useState(INITIAL_FUNDS);
+            const [viewMode, setViewMode] = useState('dashboard');
+            const [syncState, setSyncState] = useState('');
+            const [isLoaded, setIsLoaded] = useState(false);
+            
+            // Sync Modal States
+            const [showSyncModal, setShowSyncModal] = useState(false);
+            const [importCode, setImportCode] = useState('');
+            const [syncActionMsg, setSyncActionMsg] = useState('');
+
+            // Synchronous load on mount
+            useEffect(() => {
+                try {
+                    const savedDark = localStorage.getItem('st_dark');
+                    if (savedDark !== null) setIsDarkMode(JSON.parse(savedDark));
+
+                    const savedCurr = localStorage.getItem('st_curr');
+                    if (savedCurr) setCurrencyConfig(JSON.parse(savedCurr));
+
+                    const savedFunds = localStorage.getItem('st_funds');
+                    if (savedFunds) {
+                        const parsed = JSON.parse(savedFunds);
+                        if (parsed && parsed.length > 0) setFunds(parsed);
+                    }
+                } catch (e) { console.error("Failed to load local data", e); }
+                setIsLoaded(true);
+            }, []);
+
+            // Auto-save engine (only runs after initial load)
+            useEffect(() => {
+                if (!isLoaded) return;
+                try {
+                    localStorage.setItem('st_funds', JSON.stringify(funds));
+                    localStorage.setItem('st_curr', JSON.stringify(currencyConfig));
+                    localStorage.setItem('st_dark', JSON.stringify(isDarkMode));
+                    
+                    setSyncState('Saved ✨');
+                    const timer = setTimeout(() => setSyncState(''), 2000);
+                    return () => clearTimeout(timer);
+                } catch (err) {
+                    console.error("Save failed", err);
+                }
+            }, [funds, currencyConfig, isDarkMode, isLoaded]);
+
+            // Dark Mode Class Toggle
+            useEffect(() => {
+                if (isDarkMode) document.documentElement.classList.add('dark');
+                else document.documentElement.classList.remove('dark');
+            }, [isDarkMode]);
+
+            const handleCurrencyChange = (newCurrency) => {
+                const oldRate = currencyConfig.rate_to_usd || 1;
+                const newRate = newCurrency.rate_to_usd || 1;
+                const multiplier = newRate / oldRate;
+
+                const convertedFunds = funds.map(f => ({
+                    ...f,
+                    goal: Math.round((Number(f.goal) || 0) * multiplier),
+                    balance: Math.round((Number(f.balance) || 0) * multiplier),
+                    monthly: Math.round((Number(f.monthly) || 0) * multiplier),
+                    planned: Math.round((Number(f.planned) || 0) * multiplier)
+                }));
+                
+                setFunds(convertedFunds);
+                setCurrencyConfig(newCurrency);
+            };
+
+            // Cross-Browser Sync Functions
+            const generateSyncCode = () => {
+                try {
+                    const payload = { funds, currencyConfig, isDarkMode };
+                    const str = JSON.stringify(payload);
+                    const encoded = btoa(encodeURIComponent(str));
+                    navigator.clipboard.writeText(encoded);
+                    setSyncActionMsg("Code copied! Paste this in your other browser.");
+                    setTimeout(() => setSyncActionMsg(''), 4000);
+                } catch (e) {
+                    setSyncActionMsg("Failed to generate code.");
+                }
+            };
+
+            const handleImportCode = () => {
+                try {
+                    if (!importCode) return;
+                    const decoded = decodeURIComponent(atob(importCode));
+                    const payload = JSON.parse(decoded);
+                    
+                    if (payload.funds) setFunds(payload.funds);
+                    if (payload.currencyConfig) setCurrencyConfig(payload.currencyConfig);
+                    if (payload.isDarkMode !== undefined) setIsDarkMode(payload.isDarkMode);
+                    
+                    setSyncActionMsg("Data imported successfully! ✨");
+                    setImportCode('');
+                    setTimeout(() => {
+                        setSyncActionMsg('');
+                        setShowSyncModal(false);
+                    }, 2000);
+                } catch (e) {
+                    setSyncActionMsg("Invalid Sync Code. Please try again.");
+                    setTimeout(() => setSyncActionMsg(''), 3000);
+                }
+            };
+
+            if (!isLoaded) return null;
+
+            return (
+                <div className="min-h-screen flex flex-col font-sans transition-colors duration-300 overflow-x-hidden">
+                    
+                    {/* Top Navigation Bar */}
+                    <nav className="sticky top-0 z-40 bg-canvas/80 backdrop-blur-md border-b border-line px-4 sm:px-8 py-3 flex flex-row justify-between items-center gap-2">
+                        <div className="flex items-center gap-2">
+                            <span className="text-lg sm:text-xl">✨</span>
+                            <span className="font-medium tracking-wide text-sm sm:text-base whitespace-nowrap">Savings Tracker</span>
+                        </div>
+
+                        <div className="flex items-center gap-2 sm:gap-6">
+                            
+                            <div className="hidden sm:flex items-center gap-1 bg-line/30 p-1 rounded-lg">
+                                <button 
+                                    onClick={() => setViewMode('dashboard')}
+                                    className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors ${viewMode === 'dashboard' ? 'bg-surface text-primary shadow-sm' : 'text-taupe hover:text-primary'}`}
+                                >
+                                    Dashboard
+                                </button>
+                                <button 
+                                    onClick={() => setViewMode('currencies')}
+                                    className={`px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors ${viewMode === 'currencies' ? 'bg-surface text-primary shadow-sm' : 'text-taupe hover:text-primary'}`}
+                                >
+                                    Currencies
+                                </button>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                <button 
+                                    onClick={() => setShowSyncModal(true)}
+                                    className="px-3 py-1.5 rounded-full bg-line/30 hover:bg-line/60 text-primary text-xs sm:text-sm font-medium transition-colors flex items-center gap-1.5"
+                                    title="Sync across browsers"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.92-10.44l5.58 5.58"/></svg>
+                                    <span className="hidden sm:inline">Sync</span>
+                                </button>
+                                
+                                <button 
+                                    onClick={() => setIsDarkMode(!isDarkMode)}
+                                    className="p-1.5 sm:p-2 rounded-full hover:bg-surface border border-transparent hover:border-line transition-colors text-taupe hover:text-primary"
+                                    title="Toggle Dark/Light Mode"
+                                >
+                                    {isDarkMode ? (
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+                                    ) : (
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </nav>
+
+                    {/* Mobile Navigation Row */}
+                    <div className="sm:hidden flex items-center justify-center gap-1 bg-line/20 p-2 mx-4 mt-4 rounded-lg">
+                        <button onClick={() => setViewMode('dashboard')} className={`flex-1 py-2 rounded-md text-xs font-medium transition-colors ${viewMode === 'dashboard' ? 'bg-surface text-primary shadow-sm' : 'text-taupe'}`}>Dashboard</button>
+                        <button onClick={() => setViewMode('currencies')} className={`flex-1 py-2 rounded-md text-xs font-medium transition-colors ${viewMode === 'currencies' ? 'bg-surface text-primary shadow-sm' : 'text-taupe'}`}>Currencies</button>
+                    </div>
+
+                    <main className="flex-1 relative overflow-hidden">
+                        {viewMode === 'dashboard' ? (
+                            <DashboardPreview funds={funds} setFunds={setFunds} currencyConfig={currencyConfig} syncState={syncState} />
+                        ) : (
+                            <CurrenciesView currencyConfig={currencyConfig} onCurrencySelect={handleCurrencyChange} />
+                        )}
+                    </main>
+
+                    {}
+                    {showSyncModal && (
+                        <div className="fixed inset-0 bg-primary/20 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                            <div className="bg-surface rounded-2xl border border-line shadow-xl w-full max-w-md p-6 relative">
+                                <button onClick={() => setShowSyncModal(false)} className="absolute top-4 right-4 text-taupe hover:text-terracotta">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                </button>
+                                
+                                <h2 className="text-xl font-light mb-2">Cross-Browser Sync 🔄</h2>
+                                <p className="text-xs text-taupe mb-6 leading-relaxed">
+                                    Browsers act like secure bank vaults and cannot read each other's data. To move your tracker from Edge to Chrome (or vice versa), just copy your unique Sync Code!
+                                </p>
+
+                                <div className="space-y-6">
+                                    <div className="bg-canvas p-4 rounded-xl border border-line">
+                                        <div className="text-sm font-medium mb-2">1. Export this browser's data</div>
+                                        <button onClick={generateSyncCode} className="w-full bg-primary text-surface py-2 rounded-lg text-sm font-medium hover:opacity-90 transition-opacity">
+                                            Copy My Sync Code
+                                        </button>
+                                    </div>
+
+                                    <div className="bg-canvas p-4 rounded-xl border border-line">
+                                        <div className="text-sm font-medium mb-2">2. Import from another browser</div>
+                                        <input 
+                                            type="text" 
+                                            placeholder="Paste Sync Code here..." 
+                                            value={importCode}
+                                            onChange={(e) => setImportCode(e.target.value)}
+                                            className="w-full bg-surface border border-line focus:border-taupe rounded-lg py-2 px-3 outline-none text-xs text-primary mb-2 font-mono"
+                                        />
+                                        <button onClick={handleImportCode} className="w-full bg-line text-primary py-2 rounded-lg text-sm font-medium hover:bg-taupe/30 transition-colors">
+                                            Import Data
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {syncActionMsg && (
+                                    <div className="mt-4 text-center text-xs font-medium text-sage bg-sage/10 py-2 rounded-lg border border-sage/20">
+                                        {syncActionMsg}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
